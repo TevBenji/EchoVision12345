@@ -179,9 +179,22 @@ function speakNow(
   };
 
   utterance.onerror = (event) => {
-    console.error('Speech synthesis error:', event);
     isSpeaking = false;
-    reject(event);
+
+    // These three are normal operation, not failures:
+    //   interrupted / canceled — fired by our own speechSynthesis.cancel(),
+    //     which every queueMode:'flush' announcement triggers by design
+    //   not-allowed — fired before the first user gesture, since browsers
+    //     gate speech on interaction the same way they gate autoplay
+    // Rejecting on them produced a cascade of "Text-to-speech failed" errors
+    // during entirely healthy startup. Log and move on instead.
+    if (['interrupted', 'canceled', 'not-allowed'].includes(event.error)) {
+      console.debug(`Speech ${event.error} (expected, not a failure)`);
+      resolve();
+    } else {
+      console.error('Speech synthesis error:', event.error);
+      reject(event);
+    }
 
     // Continue with next item
     setTimeout(processQueue, 50);
