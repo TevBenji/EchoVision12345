@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+
+      - name: Check formatting
+        run: npm run format:check
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Proves the one-command quickstart in the README still works.
+      - name: Build image
+        run: docker build -t echovision:ci .
+
+      - name: Boot it and check it serves
+        run: |
+          docker run -d --name echovision -p 8080:80 echovision:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080 > /dev/null; then
+              echo "Served OK after ${i}s"
+              curl -fsS http://localhost:8080 | grep -q "<div id=\"root\">" \
+                && echo "SPA shell present"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Never became reachable" >&2
+          docker logs echovision >&2
+          exit 1

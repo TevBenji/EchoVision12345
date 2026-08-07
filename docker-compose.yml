@@ -1,0 +1,14 @@
+# One command:  docker compose up
+# Then open http://localhost:8080
+#
+# There is no database service and no backend. EchoVision is a static SPA
+# that runs object detection in the browser and keeps preferences in
+# localStorage, so this compose file has exactly one service.
+services:
+  web:
+    build: .
+    ports:
+      # localhost is a "secure context", so the camera works here.
+      # A LAN IP is NOT, and getUserMedia will be blocked — see README.
+      - '8080:80'
+    restart: unless-stopped

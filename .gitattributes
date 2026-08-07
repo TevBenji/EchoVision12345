@@ -1,0 +1,13 @@
+# Normalise line endings to LF in the repo and on checkout everywhere.
+# Without this, a Windows clone gets CRLF and `npm run format:check` fails on
+# every file while passing in Linux CI — a trap only Windows contributors hit.
+* text=auto eol=lf
+
+# Binary assets must never be converted.
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
