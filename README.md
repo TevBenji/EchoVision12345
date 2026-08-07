@@ -4,6 +4,9 @@ EchoVision is a browser-based assistive vision app: it watches through your
 camera, detects objects around you, and speaks what it sees out loud. Everything
 runs locally in the browser — no account, no API key, no data leaves your device.
 
+**Live: <https://web-production-53ae4.up.railway.app>** — works on a phone, since
+the camera needs HTTPS.
+
 
 ## Quickstart
 
