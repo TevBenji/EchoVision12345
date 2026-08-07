@@ -23,10 +23,19 @@ const CameraView: React.FC<CameraViewProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
   const startingCameraRef = useRef<boolean>(false);
+  // Bumped on every startCamera() call. An invocation that resumes from an
+  // await with a stale generation has been superseded by a newer one and must
+  // not touch state — otherwise a superseded attempt reports its own abort as
+  // a camera failure over a camera that is, by then, running fine.
+  const cameraGenerationRef = useRef<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  // Retry attempts are control flow, never rendered. As state it landed in
+  // startCamera's dependency array, so setRetryCount(0) on success changed the
+  // callback identity, re-fired the facingMode effect, and restarted the camera
+  // in a loop that aborted its own play(). A ref breaks that cycle.
+  const retryCountRef = useRef(0);
   const [lastRetryTime, setLastRetryTime] = useState(0);
   // False when the failure is environmental (insecure origin, unsupported
   // browser) and retrying can never succeed without reloading the page.
@@ -62,7 +71,9 @@ const CameraView: React.FC<CameraViewProps> = ({
   const processVideoFrames = useCallback(() => {
     if (!videoReference.current || !canvasRef.current || !onFrame) return;
 
-    const ctx = canvasRef.current.getContext('2d');
+    // This canvas is read back with getImageData on every animation frame, so
+    // keep its buffer in system memory rather than round-tripping the GPU.
+    const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     // Make sure video is actually playing and has dimensions
@@ -114,6 +125,7 @@ const CameraView: React.FC<CameraViewProps> = ({
 
     // Set flag to indicate camera start in progress
     startingCameraRef.current = true;
+    const generation = ++cameraGenerationRef.current;
 
     // Clean up any existing camera resources
     cleanupCamera();
@@ -159,6 +171,13 @@ const CameraView: React.FC<CameraViewProps> = ({
       );
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
+      // A newer startCamera() began while we were awaiting permission. Drop
+      // this stream rather than racing the newer one onto the video element.
+      if (generation !== cameraGenerationRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       // Store stream in ref for cleanup
       streamRef.current = stream;
 
@@ -172,7 +191,7 @@ const CameraView: React.FC<CameraViewProps> = ({
         // Camera is now active
         setIsActive(true);
         setIsLoading(false);
-        setRetryCount(0);
+        retryCountRef.current = 0;
         startingCameraRef.current = false;
 
         // Start processing frames if callback provided
@@ -185,6 +204,23 @@ const CameraView: React.FC<CameraViewProps> = ({
     } catch (rawErr) {
       // getUserMedia rejects with a DOMException; name/message are read below.
       const err = rawErr as DOMException;
+
+      // A superseded attempt must not report anything. Its play() was aborted
+      // precisely because a newer attempt replaced the stream — that newer one
+      // owns the outcome, and the camera is very likely already running.
+      if (generation !== cameraGenerationRef.current) {
+        startingCameraRef.current = false;
+        return;
+      }
+
+      // play() rejects with AbortError when a new load request supersedes it.
+      // That is the same benign case arriving a beat later; never surface it.
+      if (err.name === 'AbortError') {
+        console.debug('Camera play() aborted by a newer load request (expected)');
+        startingCameraRef.current = false;
+        return;
+      }
+
       console.error('Error accessing camera:', err);
 
       cleanupCamera();
@@ -210,8 +246,8 @@ const CameraView: React.FC<CameraViewProps> = ({
           err.name === 'ConstraintNotSatisfiedError'
         ) {
           // For mobile, try with very basic constraints if the first attempt failed
-          if (retryCount === 0) {
-            setRetryCount((prev) => prev + 1);
+          if (retryCountRef.current === 0) {
+            retryCountRef.current += 1;
             setError('Retrying with simpler camera settings...');
             setTimeout(() => {
               startCamera();
@@ -239,8 +275,8 @@ const CameraView: React.FC<CameraViewProps> = ({
         ) {
           setError('Camera does not support the requested settings. Trying alternative...');
           // Try again with less specific constraints if this was a constraint error
-          if (retryCount === 0) {
-            setRetryCount((prev) => prev + 1);
+          if (retryCountRef.current === 0) {
+            retryCountRef.current += 1;
             setTimeout(() => {
               startCamera();
             }, 500);
@@ -249,8 +285,8 @@ const CameraView: React.FC<CameraViewProps> = ({
         } else if (err.name === 'AbortError') {
           setError('Camera initialization was interrupted. Please try again.');
           // AbortError can happen when multiple requests occur, so we'll automatically retry once
-          if (retryCount === 0) {
-            setRetryCount((prev) => prev + 1);
+          if (retryCountRef.current === 0) {
+            retryCountRef.current += 1;
             setTimeout(() => {
               startCamera();
             }, 800);
@@ -270,7 +306,7 @@ const CameraView: React.FC<CameraViewProps> = ({
         description: err.message || 'Failed to access camera',
       });
     }
-  }, [facingMode, onFrame, processVideoFrames, cleanupCamera, retryCount, isMobile]);
+  }, [facingMode, onFrame, processVideoFrames, cleanupCamera, isMobile]);
 
   // Initialize camera when component mounts
   useEffect(() => {
@@ -308,7 +344,7 @@ const CameraView: React.FC<CameraViewProps> = ({
     }
 
     setLastRetryTime(now);
-    setRetryCount(0);
+    retryCountRef.current = 0;
     startCamera();
   };
 
