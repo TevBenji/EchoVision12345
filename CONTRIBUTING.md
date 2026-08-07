@@ -9,8 +9,8 @@ accessibility matter more here than feature count.
 Requires Node 22+.
 
 ```bash
-git clone https://github.com/TevBenji/EchoVision12345.git
-cd EchoVision12345
+git clone https://github.com/TevBenji/echovision.git
+cd echovision
 npm install
 npm run dev
 ```
