@@ -13,8 +13,8 @@ the camera needs HTTPS.
 You need [Docker](https://docs.docker.com/get-docker/). One command:
 
 ```bash
-git clone https://github.com/TevBenji/EchoVision12345.git
-cd EchoVision12345
+git clone https://github.com/TevBenji/echovision.git
+cd echovision
 docker compose up
 ```
 
