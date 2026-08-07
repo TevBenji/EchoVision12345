@@ -3,3 +3,8 @@ node_modules
 package-lock.json
 *.min.*
 public
+
+# Markdown is deliberately not format-gated. Editing a doc through GitHub's web
+# UI cannot run Prettier, so enforcing it here breaks CI on every README typo fix
+# for no consistency benefit. Code formatting is still enforced.
+*.md
