@@ -28,6 +28,9 @@ const CameraView: React.FC<CameraViewProps> = ({
   const [isActive, setIsActive] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [lastRetryTime, setLastRetryTime] = useState(0);
+  // False when the failure is environmental (insecure origin, unsupported
+  // browser) and retrying can never succeed without reloading the page.
+  const [canRetry, setCanRetry] = useState(true);
   const isMobile = useIsMobile();
 
   // Use external ref if provided, otherwise use internal ref
@@ -118,6 +121,24 @@ const CameraView: React.FC<CameraViewProps> = ({
     // Show loading state
     setIsLoading(true);
     setError(null);
+
+    // getUserMedia only exists in a secure context. Served over plain HTTP on
+    // a LAN address, `navigator.mediaDevices` is undefined outright — calling
+    // it throws an opaque TypeError rather than a permission error, which then
+    // gets reported to the user as "Cannot read properties of undefined".
+    // Check the precondition so the message names the actual problem.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      const insecureOrigin = !window.isSecureContext;
+      setError(
+        insecureOrigin
+          ? `Camera blocked: ${window.location.origin} is not a secure origin. Browsers only allow camera access over HTTPS or on localhost.`
+          : 'This browser does not support camera access (getUserMedia is unavailable).',
+      );
+      setCanRetry(false);
+      setIsLoading(false);
+      startingCameraRef.current = false;
+      return;
+    }
 
     try {
       // Try to get access to the camera with the requested facing mode
@@ -324,11 +345,32 @@ const CameraView: React.FC<CameraViewProps> = ({
 
       {/* Error overlay */}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-10 p-6">
+        <div
+          role="alert"
+          className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-10 p-6"
+        >
           <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
           <h3 className="text-white text-xl font-medium mb-2">Camera Error</h3>
           <p className="text-white/80 text-center mb-6">{error}</p>
-          {isMobile && (
+
+          {/* Retrying cannot fix an insecure origin — tell them what actually will. */}
+          {!canRetry && !window.isSecureContext && (
+            <div className="text-white/70 text-sm mb-6 max-w-sm text-left">
+              <p className="font-medium mb-2 text-center">To fix this, use one of:</p>
+              <ul className="list-disc pl-6 space-y-1">
+                <li>
+                  Open <code className="text-white">http://localhost:8080</code> on this machine
+                </li>
+                <li>Serve the app over HTTPS</li>
+                <li>
+                  Tunnel it:{' '}
+                  <code className="text-white">cloudflared tunnel --url http://localhost:8080</code>
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {canRetry && isMobile && (
             <div className="text-white/70 text-sm mb-6 max-w-xs text-center">
               <p className="font-medium mb-2">Mobile Troubleshooting:</p>
               <ul className="list-disc text-left pl-6 space-y-1">
@@ -339,9 +381,12 @@ const CameraView: React.FC<CameraViewProps> = ({
               </ul>
             </div>
           )}
-          <Button onClick={retryCamera} className="bg-white text-black hover:bg-gray-200">
-            Retry Camera Access
-          </Button>
+
+          {canRetry && (
+            <Button onClick={retryCamera} className="bg-white text-black hover:bg-gray-200">
+              Retry Camera Access
+            </Button>
+          )}
         </div>
       )}
 
