@@ -1,5 +1,7 @@
 # EchoVision
 
+![CI](https://github.com/TevBenji/echovision/actions/workflows/ci.yml/badge.svg) ![license](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square) ![privacy](https://img.shields.io/badge/privacy-100%25_on--device-8b5cf6?style=flat-square) ![docker](https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)
+
 EchoVision is a browser-based assistive vision app: it watches through your
 camera, detects objects around you, and speaks what it sees out loud. Everything
 runs locally in the browser — no account, no API key, no data leaves your device.
@@ -13,8 +15,8 @@ the camera needs HTTPS.
 You need [Docker](https://docs.docker.com/get-docker/). One command:
 
 ```bash
-git clone https://github.com/TevBenji/EchoVision12345.git
-cd EchoVision12345
+git clone https://github.com/TevBenji/echovision.git
+cd echovision
 docker compose up
 ```
 
